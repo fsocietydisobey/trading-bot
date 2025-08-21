@@ -19,7 +19,14 @@ def token_required(f):
 
         try:
             data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
-            current_user = data['user']  # Or fetch user from DB based on data
+            # Extract standard claims
+            token_sub = data.get('sub')   # subject (user id/username)
+            token_jti = data.get('jti')   # unique token id
+            # Optional: check revocation/blacklist using token_jti
+            # if is_token_revoked(token_jti):
+            #     return jsonify({'message': 'Token has been revoked'}), 401
+            if not token_sub:
+                return jsonify({'message': 'Invalid token payload'}), 401
         except jwt.ExpiredSignatureError:
             return jsonify({'message': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
@@ -27,6 +34,6 @@ def token_required(f):
         except Exception as e:
             return jsonify({'message': f'Something went wrong: {str(e)}'}), 500
 
-        return f(current_user, *args, **kwargs)  # Pass user to the route
+        return f(token_sub, *args, **kwargs)  # Pass subject (user id/username) to the route
 
     return decorated

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from models.user import User
 import jwt
 import datetime
+import uuid
 from werkzeug.security import generate_password_hash, check_password_hash
 from db.mongo import mongo
 from middleware.auth_middleware import token_required  # Import the decorator
@@ -45,13 +46,21 @@ def login():
     user = User.find_by_username(username)
 
     if user and check_password_hash(user.password, password):  # Check hashed password
+        now = datetime.datetime.utcnow()
+        ttl_minutes = int(current_app.config.get('JWT_ACCESS_TTL_MIN', 30))
         payload = {
-            'user': username,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+            'sub': username,                 # subject (user identifier)
+            'iat': now,                      # issued-at
+            'exp': now + datetime.timedelta(minutes=ttl_minutes),  # expiration
+            'jti': str(uuid.uuid4()),        # unique token id for revocation/auditing
+            # Optional hardening:
+            # 'iss': 'your-service-name',
+            # 'aud': 'your-client-id-or-audience'
         }
         token = jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256')
         return jsonify({'token': token}), 200
     return jsonify({'message': 'Invalid credentials'}), 401
+
 
 
 @auth_bp.route('/protected', methods=['GET'])

@@ -9,7 +9,13 @@ services:
     environment:
       FLASK_APP: app.py
       FLASK_DEBUG: "true"
-      # MONGO_URI: mongodb://mongo:27017/your_database  # Remove this line
+      SECRET_KEY: ${SECRET_KEY}  # Get SECRET_KEY from environment
+      MONGO_URI: ${MONGO_URI}  # Get Mongo URI from environment
+      INFLUX_URL: ${INFLUX_URL}       # Get from environment
+      INFLUX_TOKEN: ${INFLUX_TOKEN}   # Get from environment
+      INFLUX_ORG: ${INFLUX_ORG}       # Get from environment
+      INFLUX_BUCKET: ${INFLUX_BUCKET}   # Get from environment
+
     volumes:
       - .:/app  # Mount the project directory for development
     restart: always
