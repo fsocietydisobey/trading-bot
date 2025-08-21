@@ -1,0 +1,55 @@
+# Bytecode
+*.pyc
+__pycache__/
+
+# Virtual environment
+.venv/
+venv/
+env/
+*/.venv/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+web_modules/
+
+# Distribution / packaging
+dist/
+build/
+sdist/
+*.egg-info/
+*.whl
+MANIFEST.in
+*.lib
+
+# Editor backups and temporary files
+*.[oaic]
+*~
+*.swp
+*.swo
+*.tmp
+.DS_Store
+._*
+*.log
+*.bak
+
+# IDE-specific files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Docker
+.dockerignore
+
+# OS generated files #
+Thumbs.db
+ehthumbs.db
+
+# Sensitive Information - adjust as needed!
+secrets.ini
+local_config.py
+db_credentials.txt
+*.key
+*.pem

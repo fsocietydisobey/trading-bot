@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongo
+      - influxdb
+    environment:
+      FLASK_APP: app.py
+      FLASK_DEBUG: "true"
+      # MONGO_URI: mongodb://mongo:27017/your_database  # Remove this line
+    volumes:
+      - .:/app  # Mount the project directory for development
+    restart: always
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db # Named volume for persistent data
+    restart: always
+
+  influxdb:
+    image: influxdb:latest
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: your_influxdb_admin_password  # Change this!
+      DOCKER_INFLUXDB_INIT_ORG: your_org
+      DOCKER_INFLUXDB_INIT_BUCKET: your_bucket
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: your_token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2 # Named volume for persistent data
+    restart: always
+
+volumes:
+  mongo_data:
+  influxdb_data:
