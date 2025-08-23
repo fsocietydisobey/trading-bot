@@ -1,0 +1,128 @@
+# Common Docker Compose commands
+
+# Build images and start all services
+sudo docker compose up --build
+
+# Start/stop/restart without rebuild
+sudo docker compose up -d
+sudo docker compose stop
+sudo docker compose restart
+
+# View logs (follow)
+sudo docker compose logs -f
+sudo docker compose logs app -f
+sudo docker compose logs streamer -f
+sudo docker compose logs mongo -f
+sudo docker compose logs influxdb -f
+
+# One-off commands (run inside a service container with project env)
+sudo docker compose run --rm app python scripts/load_historical.py --symbol X:BTCUSD --granularity day --start 2023-01-01 --end 2023-12-31 --adjusted true
+sudo docker compose run --rm app python scripts/backfill_pairs.py --symbols X:BTCUSD,X:ETHUSD --granularity day --start 2023-01-01 --end 2023-12-31 --adjusted true
+sudo docker compose run --rm streamer python services/streamer/fanout_ws.py
+
+# Exec into running containers
+sudo docker compose exec app sh
+sudo docker compose exec streamer sh
+sudo docker compose exec mongo sh
+sudo docker compose exec influxdb sh
+
+# Environment quick checks inside containers
+sudo docker compose exec app env | grep -E 'INFLUX_|MONGO_URI|POLYGON|JWT'
+sudo docker compose exec streamer env | grep -E 'INFLUX_|POLYGON|WS_BIND'
+
+# Health checks
+curl http://localhost:5000/health
+curl http://localhost:5000/health/mongo
+curl http://localhost:5000/health/influx
+
+# API tests
+# Register and login
+curl -X POST http://localhost:5000/auth/register -H "Content-Type: application/json" -d '{"username":"alice","password":"Password123","email":"alice@example.com"}'
+TOKEN=$(curl -s -X POST http://localhost:5000/auth/login -H "Content-Type: application/json" -d '{"username":"alice","password":"Password123"}' | python -c "import sys, json; print(json.load(sys.stdin)['token'])"); echo $TOKEN
+
+# Data API
+curl "http://localhost:5000/api/snapshot?symbol=X:BTCUSD&measurement=aggs_1d"
+curl "http://localhost:5000/api/history?symbol=X:BTCUSD&granularity=day&start=2023-01-01T00:00:00Z&end=2023-12-31T23:59:59Z"
+# If protected, add: -H "Authorization: Bearer $TOKEN"
+
+# WebSocket fan-out test (requires websocat or wscat installed on host)
+# websocat example:
+websocat "ws://localhost:8081/?token=$TOKEN"
+
+# InfluxDB quick CLI queries (inside influxdb container)
+sudo docker compose exec influxdb influx bucket list
+sudo docker compose exec influxdb influx query 'from(bucket: "market_data") |> range(start: -5y) |> limit(n:5)'
+
+# Reset InfluxDB (dev only; wipes data)
+sudo docker compose down
+sudo docker volume rm $(sudo docker volume ls -q | grep influxdb_data)
+
+# Rebuild only specific services
+sudo docker compose build app
+sudo docker compose build streamer
+
+# Recreate containers without cache
+sudo docker compose build --no-cache
+sudo docker compose up -d --force-recreate
+
+# Misc Mongo helpers
+sudo docker compose exec mongo mongosh --eval 'db.adminCommand({ ping: 1 })'
+sudo docker compose exec mongo mongosh --eval 'use your_database; show collections;'
+
+
+# Common InfluxDB commands cheat sheet
+
+# List orgs and buckets
+sudo docker compose exec influxdb influx org list
+sudo docker compose exec influxdb influx bucket list
+
+# Quick sanity query (show recent data from a measurement)
+sudo docker compose exec influxdb influx query '
+from(bucket: "market_data")
+  |> range(start: -5y)
+  |> filter(fn: (r) => r._measurement == "aggs_1d")
+  |> filter(fn: (r) => r.symbol == "X:BTCUSD")
+  |> limit(n: 5)
+'
+
+# Last close (latest value of field "c")
+sudo docker compose exec influxdb influx query '
+from(bucket: "market_data")
+  |> range(start: -5y)
+  |> filter(fn: (r) => r._measurement == "aggs_1d")
+  |> filter(fn: (r) => r.symbol == "X:BTCUSD")
+  |> filter(fn: (r) => r._field == "c")
+  |> last()
+'
+
+# Pivot fields to columns for OHLC window
+sudo docker compose exec influxdb influx query '
+from(bucket: "market_data")
+  |> range(start: 2023-01-01T00:00:00Z, stop: 2024-01-01T00:00:00Z)
+  |> filter(fn: (r) => r._measurement == "aggs_1d")
+  |> filter(fn: (r) => r.symbol == "X:BTCUSD")
+  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> keep(columns: ["_time","o","h","l","c","v","vw","n"])
+  |> limit(n: 5)
+'
+
+# Query via HTTP API (Flux)
+curl -s -X POST "http://localhost:8086/api/v2/query?org=primary" \
+  -H "Authorization: Token $INFLUX_TOKEN" \
+  -H "Content-Type: application/vnd.flux" \
+  -d $'from(bucket: "market_data") |> range(start: -5y) |> filter(fn: (r) => r._measurement == "aggs_1d") |> limit(n: 3)'
+
+# Write a single point via HTTP (line protocol, ns precision)
+curl -s -X POST "http://localhost:8086/api/v2/write?org=primary&bucket=market_data&precision=ns" \
+  -H "Authorization: Token $INFLUX_TOKEN" \
+  -H "Content-Type: text/plain; charset=utf-8" \
+  --data-binary 'aggs_1d,symbol=X:BTCUSD,source=polygon,adjusted=true o=30000,h=30500,l=29500,c=30200,v=12345i,vw=30050.0,n=100i 1672531200000000000'
+
+# List measurements in a bucket
+sudo docker compose exec influxdb influx query '
+import "influxdata/influxdb/schema"
+schema.measurements(bucket: "market_data")
+'
+
+# Create a new bucket with 30d retention (example)
+sudo docker compose exec influxdb influx bucket create -n scratch -o primary -r 30d

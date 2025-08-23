@@ -2,3 +2,6 @@ Flask
 Flask-PyMongo
 PyJWT
 influxdb-client
+polygon
+websockets
+click

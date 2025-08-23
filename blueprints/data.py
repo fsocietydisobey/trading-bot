@@ -1,7 +1,9 @@
 # blueprints/data.py (example usage)
 from flask import Blueprint, jsonify, request
-from db.influx import write_point, query_flux
 from influxdb_client import Point, WritePrecision
+from config.settings import settings  # use centralized settings
+# Prefer canonical helpers from services/common/influx
+from services.common.influx import query_flux
 
 data_bp = Blueprint("data", __name__)
 
@@ -23,8 +25,8 @@ def write_ohlc():
         .field("trades", int(body.get("trades", 0)))
         .time(int(body["time_sec"]) * 1_000_000_000, WritePrecision.NS)
     )
-    # batch helper also works; here we can directly write a single point via write_points_batch
-    from db.influx import write_points_batch
+    # Use the canonical batch helper
+    from services.common.influx import write_points_batch
     write_points_batch([p])
     return jsonify({"status": "ok"})
 
@@ -35,7 +37,7 @@ def last_ohlc():
     interval = request.args.get("interval", "1m")
     n = int(request.args.get("n", "100"))
     query = f'''
-from(bucket: "{os.environ.get("INFLUX_BUCKET")}")
+from(bucket: "{settings.INFLUX_BUCKET}")
   |> range(start: -30d)
   |> filter(fn: (r) => r["_measurement"] == "ohlc")
   |> filter(fn: (r) => r["symbol"] == "{symbol}")

@@ -1,0 +1,61 @@
+# Stop and remove all containers plus named/anonymous volumes from this compose project
+docker compose down -v
+
+# Remove the existing frontend directory (clean slate)
+sudo rm -rf frontend
+
+# Recreate the folder structure for the Vue app
+mkdir -p frontend/frontend-app
+
+# Ensure the frontend folder is owned by your host user (prevents EACCES inside containers)
+sudo chown -R "$(id -u)":"$(id -g)" frontend
+
+# Export your host user/group IDs so containers run as you (and can write to mounted folders)
+export HOST_UID=$(id -u); export HOST_GID=$(id -g)
+
+# Open a short-lived Node shell and scaffold the Vuetify app into ./frontend/frontend-app, then install deps
+# (Runs inside the node_cli service with correct UID/GID and working_dir=/workspace)
+docker compose run --rm node_cli -lc "npm create vuetify@latest . && npm install"
+
+# Start the frontend dev server (Vite) via the frontend service; maps container 5173 -> host 5173
+docker compose up -d frontend
+
+*********************
+
+# Make sure your host UID/GID are exported so files stay owned by you
+export HOST_UID=$(id -u)
+export HOST_GID=$(id -g)
+
+# Open a Node shell in ./frontend/frontend-app
+docker compose run --rm node_cli
+
+
+# Install packages
+npm install <package> [--save-dev]
+
+# Example
+npm install axios
+npm install -D eslint
+
+*********************
+
+# Open a shell in the running frontend container
+docker compose exec frontend sh
+
+npm install <package> [--save-dev]
+
+
+Notes:
+- The working directories are already set in compose:
+    - node_cli uses /workspace mapped to ./frontend/frontend-app
+    - frontend uses /app mapped to ./frontend/frontend-app
+
+- If you see EACCES errors, ensure your frontend folder is owned by your user on the host:
+``` bash
+sudo chown -R "$(id -u)":"$(id -g)" ./frontend/frontend-app
+chmod -R u+rwX ./frontend/frontend-app
+```
+- To also run the dev server from node_cli (and expose ports), add --service-ports:
+``` bash
+docker compose run --rm --service-ports node_cli -lc "npm run dev -- --host --port 5173"
+```

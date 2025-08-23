@@ -6,16 +6,11 @@ services:
     depends_on:
       - mongo
       - influxdb
+    env_file:
+      - .env
     environment:
       FLASK_APP: app.py
       FLASK_DEBUG: "true"
-      SECRET_KEY: ${SECRET_KEY}  # Get SECRET_KEY from environment
-      MONGO_URI: ${MONGO_URI}  # Get Mongo URI from environment
-      INFLUX_URL: ${INFLUX_URL}       # Get from environment
-      INFLUX_TOKEN: ${INFLUX_TOKEN}   # Get from environment
-      INFLUX_ORG: ${INFLUX_ORG}       # Get from environment
-      INFLUX_BUCKET: ${INFLUX_BUCKET}   # Get from environment
-
     volumes:
       - .:/app  # Mount the project directory for development
     restart: always
@@ -32,16 +27,57 @@ services:
     image: influxdb:latest
     ports:
       - "8086:8086"
+    env_file:
+      - .env
     environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: your_influxdb_admin_password  # Change this!
-      DOCKER_INFLUXDB_INIT_ORG: your_org
-      DOCKER_INFLUXDB_INIT_BUCKET: your_bucket
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: your_token
+      DOCKER_INFLUXDB_INIT_MODE: ${DOCKER_INFLUXDB_INIT_MODE}
+      DOCKER_INFLUXDB_INIT_USERNAME: ${DOCKER_INFLUXDB_INIT_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${DOCKER_INFLUXDB_INIT_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${DOCKER_INFLUXDB_INIT_RETENTION:-0}
     volumes:
       - influxdb_data:/var/lib/influxdb2 # Named volume for persistent data
     restart: always
+
+  streamer:
+    build: .
+    depends_on:
+      - influxdb
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app
+    command: python services/streamer/fanout_ws.py
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/app
+    restart: always
+# ... existing code ...
+  frontend:
+    image: node:20
+    container_name: frontend
+    working_dir: /app
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      - HOST=0.0.0.0
+    volumes:
+      - ./frontend/frontend-app:/app
+    command: sh -lc "npm ci || npm install; npm run dev -- --host --port 5173"
+    ports:
+      - "5173:5173"
+    restart: always
+# ... existing code ...
+  node_cli:
+    image: node:20
+    container_name: node_cli
+    working_dir: /workspace
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - ./frontend/frontend-app:/workspace
+    entrypoint: sh
 
 volumes:
   mongo_data:
