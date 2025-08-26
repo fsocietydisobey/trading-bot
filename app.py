@@ -7,8 +7,14 @@ from db.mongo import mongo
 import os
 from config.settings import settings
 from influxdb_client import InfluxDBClient
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["http://localhost:5173"]}},
+    supports_credentials=True,
+)
 
 # Configuration
 app.config['SECRET_KEY'] = settings.SECRET_KEY or os.environ.get('SECRET_KEY')
@@ -24,6 +30,7 @@ logging.basicConfig(level=logging.DEBUG)
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(data_bp, url_prefix='/data')
 app.register_blueprint(api_bp, url_prefix='/api')
+
 
 @app.route('/health')
 def health():
@@ -50,6 +57,7 @@ def health():
     http_code = 200 if status["mongo"] == "ok" and status["influx"] == "ok" else 503
     return jsonify(status), http_code
 
+
 @app.route('/health/influx')
 def health_influx():
     try:
@@ -61,6 +69,7 @@ def health_influx():
     except Exception as e:
         return jsonify({"influx": f"error: {e}"}), 503
 
+
 @app.route('/health/mongo')
 def health_mongo():
     try:
@@ -69,10 +78,12 @@ def health_mongo():
     except Exception as e:
         return jsonify({"mongo": f"error: {e}"}), 503
 
+
 @app.route('/')
 def hello_world():
     logging.debug('Hello World!')
     return 'Hello World!'
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')

@@ -5,3 +5,8 @@ influxdb-client
 polygon
 websockets
 click
+Flask-Cors
+
+pandas==2.2.2
+numpy==1.26.4
+pandas-ta==0.3.14b0
